@@ -213,4 +213,54 @@ def evaluate_probability(dev_dataloader,model,device):
     target = np.hstack(target_list)
     predict = np.hstack(predict_list)
     return pearson(target,predict)
+def evaluate_tabnet_dataset(model,data_loader,device):
+    model.eval()
+    target_price_list = []
+    predict_price_list = []
 
+    target_year_list = []
+    predict_year_list = []
+    target_month_list = []
+    predict_month_list = []
+    target_day_list = []
+    predict_day_list = []
+    for item in data_loader:
+        ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_time,target_value = to_device(item,device)
+        pridict_time,pridict_value = model(ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor)
+
+        target_value = target_value.detach().cpu().numpy()
+        target_price_list.append(target_value)
+        pridict_value = pridict_value.detach().cpu().numpy()
+        predict_price_list.append(pridict_value)
+
+
+        predict = torch.argmax(pridict_time[0],dim=1).detach().cpu().numpy()
+        target = target_time[0].detach().cpu().numpy()
+        target_year_list.append(target)
+        predict_year_list.append(predict)
+
+        predict = torch.argmax(pridict_time[1],dim=1).detach().cpu().numpy()
+        target = target_time[1].detach().cpu().numpy()
+        target_month_list.append(target)
+        predict_month_list.append(predict)
+
+        predict = torch.argmax(pridict_time[2],dim=1).detach().cpu().numpy()
+        target = target_time[2].detach().cpu().numpy()
+        target_day_list.append(target)
+        predict_day_list.append(predict)
+    
+    target_price_list = np.hstack(target_price_list)
+    predict_price_list = np.hstack(predict_price_list)
+    
+    target_year_list = np.hstack(target_year_list)
+    predict_year_list = np.hstack(predict_year_list)
+    target_month_list = np.hstack(target_month_list)
+    predict_month_list = np.hstack(predict_month_list)
+    target_day_list = np.hstack(target_day_list)
+    predict_day_list = np.hstack(predict_day_list)
+
+    year_score = f1_score(target_year_list,predict_year_list,average="macro")
+    month_score = f1_score(target_month_list,predict_month_list,average="macro")
+    day_score = f1_score(target_day_list,predict_day_list,average="macro")
+    pearson_score = pearson(target_price_list,predict_price_list)
+    return pearson_score,year_score,month_score,day_score

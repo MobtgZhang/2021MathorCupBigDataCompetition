@@ -11,7 +11,7 @@ def get_parse_args():
     parser.add_argument('--neighbor-batch-size', default=32, type=int)
     parser.add_argument('--test-batch-size', default=8192, type=int)
     parser.add_argument("--grad-norm", type=float, default=1.0)
-    parser.add_argument("--v-lambda", type=float, default=0.5)
+    parser.add_argument("--v-lambda", type=float, default=0.2)
     
     # args.graph_split_size, num_entities, num_relations, args.negative_sample
     parser.add_argument("--graph-split-size", type=float, default=0.5)

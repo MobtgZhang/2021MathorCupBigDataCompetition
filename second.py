@@ -11,7 +11,7 @@ from config import get_parse_args
 from src.utils import filter_other_dataset,split_dataset,to_device,write_to_txt,create_dataset,fix_ext_dataset
 from src.data import CarDataset,batchfy,CarDatasetExtenstion,batchfy_ext
 from src.model import TabNet,TEIGANNClassifier,CombineLoss
-from src.evaluate import evaluate_probability
+from src.evaluate import evaluate_dataset, evaluate_probability,evaluate_tabnet_dataset, pearson
 
 logging.basicConfig(level = logging.INFO,format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger()
@@ -103,6 +103,7 @@ def train_tabnet_model(args):
 
     for epoch in range(args.epoch_times):
         loss_all = 0.0
+        model.train()
         for item in train_dataloader:
             optimizer.zero_grad()
             ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_time,target_value = to_device(item,device)
@@ -112,7 +113,8 @@ def train_tabnet_model(args):
             optimizer.step()
             val_loss = loss.item()
             loss_all += val_loss
-        logger.info("epoch is %d, loss is %0.4f"%(epoch+1,loss_all))
+        pearson_score,year_score,month_score,day_score = evaluate_tabnet_dataset(model,dev_dataloader,device)
+        logger.info("epoch is %d, loss is %0.4f, pearson is %0.4f, year is %0.4f, month is %0.4f, day is %0.4f"%(epoch+1,loss_all,pearson_score,year_score,month_score,day_score))
 if __name__ == "__main__":
     args = get_parse_args()
     if not os.path.exists(args.log_dir):

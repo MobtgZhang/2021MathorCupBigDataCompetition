@@ -43,6 +43,28 @@ def batchfy(batch):
     day_tensor = torch.tensor(time_day_list,dtype=torch.long)
     target_tensor = torch.tensor(target,dtype=torch.float)
     return ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_tensor
+def batchfy_ext(batch):
+    ent_list = [ex[0] for ex in batch]
+    val_list = [ex[1][1] for ex in batch]
+    time_year_list = [[int(ex[2][1][k][0])-2000 for k in range(len(ex[2][1]))] for ex in batch]
+    time_month_list = [[int(ex[2][1][k][1])-1 for k in range(len(ex[2][1]))] for ex in batch]
+    time_day_list = [[int(ex[2][1][k][2])-1 for k in range(len(ex[2][1]))] for ex in batch]
+    
+    target_year = [int(ex[3][1][0])-2000 for ex in batch]
+    target_month = [int(ex[3][1][1])-1 for ex in batch]
+    target_day = [int(ex[3][1][2])-1 for ex in batch]
+    
+    target_value = [ex[4][1] for ex in batch]
+    ent_tensor = torch.tensor(ent_list,dtype=torch.long)
+    val_tensor = torch.tensor(val_list,dtype=torch.float)
+    year_tensor = torch.tensor(time_year_list,dtype=torch.long)
+    month_tensor = torch.tensor(time_month_list,dtype=torch.long)
+    day_tensor = torch.tensor(time_day_list,dtype=torch.long)
+    target_year_tensor = torch.tensor(target_year,dtype=torch.long)
+    target_month_tensor = torch.tensor(target_month,dtype=torch.long)
+    target_day_tensor = torch.tensor(target_day,dtype=torch.long)
+    target_value_tensor = torch.tensor(target_value,dtype=torch.float)
+    return ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,(target_year_tensor,target_month_tensor,target_day_tensor),target_value_tensor
 def test_batchfy(batch):
     ent_list = [ex[0] for ex in batch]
     val_list = [ex[1][1] for ex in batch]
@@ -191,13 +213,22 @@ class CarDatasetExtenstion(Dataset):
                     std_value = df.std()
                     mean_value = df.mean()
                     self.dataset[name] = ((df-mean_value)/std_value).tolist()
+                name = "成交价格"
+                df = self.dataset[name]
+                std_value = df.std()
+                mean_value = df.mean()
+                self.dataset[name] = ((df-mean_value)/std_value).tolist()
             elif method == "maxmin":
                 for name in self.names_dict["continue"]:
                     df = self.dataset[name]
                     max_value = df.max()
                     min_value = df.min()
                     self.dataset[name] = ((df-min_value)/(max_value-min_value)).tolist()
-            
+                name = "成交价格"
+                df = self.dataset[name]
+                max_value = df.max()
+                min_value = df.min()
+                self.dataset[name] = ((df-min_value)/(max_value-min_value)).tolist()
     def __getitem__(self,item):
         return vectorize_ext(self.dataset.loc[item,:],self.entity_dict,self.names_dict,self.train)
     def __len__(self):
@@ -219,9 +250,8 @@ def vectorize_ext(item_dataset,entity_dict,names_dict,train):
         ent_index = entity_dict[name,value]
         discrete_list.append(ent_index)
     if train :
-        target_data_a = item_dataset["成交时间"]
-        target_data_b = item_dataset["成交价格"]
-        time_data = [item.split("-") for item in time_data]
-        return discrete_list,continue_list,time_list,target_data
+        target_data_a = ("成交时间",item_dataset["成交时间"].split("-"))
+        target_data_b = ("成交价格",item_dataset["成交价格"])
+        return discrete_list,continue_list,time_list,target_data_a,target_data_b
     else:
         return discrete_list,continue_list,time_list

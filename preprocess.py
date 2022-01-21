@@ -8,7 +8,6 @@ from tqdm import tqdm,trange
 import matplotlib.pyplot as plt
 
 import torch
-import torch_geometric
 
 from src.utils import split_dataset,write_to_txt
 from src.utils import change_txt_to_xlsx
@@ -35,15 +34,6 @@ def train_rgcn_model(args):
 
     test_graph = build_test_graph(len(ent_dict), len(rel_dict), train_triplets)
     valid_triplets = torch.LongTensor(valid_triplets)
-    """
-    test_graph_dataloader = torch_geometric.loader.NeighborLoader(
-        test_graph,
-        # Sample 30 neighbors for each node for 2 iterations
-        num_neighbors=[15]*2,
-        # Use a batch size of 128 for sampling training nodes
-        batch_size=args.neighbor_batch_size,#args.batch_size,
-    )
-    """
     model = RGCN(len(ent_dict), len(rel_dict),embedding_dim=args.embedding_dim, num_bases=args.n_bases, dropout=args.dropout)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     logger.info(model)
@@ -93,15 +83,12 @@ def train_rgcn_model(args):
     embedding_file = os.path.join(model_dir,'embedding.npz')
     np.savez(embedding_file,ent_embedding= model.cpu().entity_embedding.weight.detach().numpy(),
                                 rel_embedding = model.cpu().relation_embedding.detach().numpy())
-    """
     title = "RGCN Net training for mrr score."
     ylabel = "MRR score"
     xlabel = "Model training times"
     save_fig_name = os.path.join(args.result_dir,"RGCN-mrr.png")
     draw_result(mrr_list,title,ylabel,xlabel,save_fig_name)
     save_txt_filename = os.path.join(args.result_dir,"RGCN-mrr.txt")
-    write_to_txt(mrr_list,save_txt_filename)
-    """
 def preprocess(args):
     if not os.path.exists(args.result_dir):
         os.mkdir(args.result_dir)

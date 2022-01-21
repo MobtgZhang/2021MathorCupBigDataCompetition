@@ -10,7 +10,7 @@ import torch.nn as nn
 
 from src.data import CarDataset
 from src.data import batchfy,test_batchfy
-from src.utils import to_cuda,write_to_txt
+from src.utils import to_device,write_to_txt
 from src.evaluate import evaluate_dataset,draw_result,test_raw_dataset
 from src.model import IGANN,TEIGANN
 from config import get_parse_args
@@ -66,7 +66,7 @@ def train_dnn_model(args):
         loss_all = 0.0
         for item in train_dataloader:
             optimizer.zero_grad()
-            ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_tensor = to_cuda(item,device)
+            ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_tensor = to_device(item,device)
             predict_tensor = model(ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor)
             loss = loss_fn(predict_tensor,target_tensor)
             loss.backward()
@@ -148,9 +148,9 @@ def main():
     model_dir = os.path.join(args.result_dir,"model")
     args.embedding_file = os.path.join(model_dir,'embedding.npz')
     args.model_file_name = None
-    for filename in os.listdir(args.result_dir):
+    for filename in os.listdir(model_dir):
         name_list = filename.split(".")
-        filename = os.path.join(args.result_dir,filename)
+        filename = os.path.join(model_dir,filename)
         if os.path.isfile(filename) and name_list[1] == "ckpt": 
             args.model_file_name = filename
             break

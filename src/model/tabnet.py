@@ -1,4 +1,7 @@
+from calendar import month
 import math
+from re import S
+from turtle import forward
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -129,7 +132,6 @@ class TabNet(nn.Module):
         year_span = 101,
         feature_channels = 10,
         emb_dropout=0.2,
-        out_channels: int=1,
         n_decision_steps:int=4,
         bn_momentum: float = 0.1,
         n_d: int = 16,
@@ -156,7 +158,7 @@ class TabNet(nn.Module):
         self.ent_size = ent_size
         self.time_size = time_size
         self.value_size = value_size
-        
+        self.out_channels = 1
         self.year_span = year_span
         self.ent_dim = ent_dim
         self.feature_channels = feature_channels
@@ -206,7 +208,12 @@ class TabNet(nn.Module):
                 for _ in range(n_decision_steps - 1)
             ]
         )
-        self.fc = nn.Linear(n_d, out_channels, bias=False)
+        self.month_span = 12
+        self.day_span = 31
+        self.fc_year = nn.Linear(n_d, self.year_span, bias=False)
+        self.fc_month= nn.Linear(n_d, self.month_span, bias=False)
+        self.fc_day = nn.Linear(n_d, self.day_span, bias=False)
+        self.fc_price = nn.Linear(n_d, self.out_channels, bias=False)
         
     def forward(self,ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor):
 
@@ -260,5 +267,23 @@ class TabNet(nn.Module):
                 ) / (self.n_decision_steps - 1)
                 masked_feature = mask * feature
                 masks.append(mask)
-        logits = self.fc(aggregated_output).squeeze()
-        return torch.sigmoid(logits), masks, sparsity_regularization
+        year_logits = F.softmax(self.fc_year(aggregated_output),dim=0).squeeze()
+        month_logits = F.softmax(self.fc_month(aggregated_output),dim=0).squeeze()
+        day_logits = F.softmax(self.fc_day(aggregated_output),dim=0).squeeze()
+        price_value = self.fc_price(aggregated_output).squeeze()
+        # , masks, sparsity_regularization
+        return (year_logits,month_logits,day_logits),price_value
+
+class CombineLoss(nn.Module):
+    def __init__(self,v_lambda):
+        super(CombineLoss,self).__init__()
+        assert 0.0<=v_lambda and 1.0>=v_lambda
+        self.v_lambda = v_lambda
+        self.cross_entropy_loss = nn.CrossEntropyLoss()
+        self.mse_loss = nn.MSELoss()
+    def forward(self,time_logits,price_value,target_time,target_value):
+        loss = 0.0
+        for y_target,y_pred in zip(target_time,time_logits):
+            loss += self.cross_entropy_loss(y_pred,y_target)
+        loss = loss*self.v_lambda+(1-self.v_lambda)*self.mse_loss(price_value,target_value)
+        return loss

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from sklearn.metrics import f1_score
-from .utils import to_cuda
+from .utils import to_device
 from .data import CarDataset
 
 logging.basicConfig(level = logging.INFO,format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -49,7 +49,7 @@ def evaluate_dataset(model,dev_dataloader,device):
     mape_list = []
     mse_list = []
     for item in dev_dataloader:
-        ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_tensor = to_cuda(item,device)
+        ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_tensor = to_device(item,device)
         predict_tensor = model(ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor)
         target = target_tensor.detach().cpu().numpy()
         predict = predict_tensor.detach().cpu().numpy()
@@ -71,34 +71,28 @@ def test_raw_dataset(args,model,test_dataloader,device):
     value_all_list = []
     raw_data_file = os.path.join(args.result_dir,"raw_dataset.xlsx")
     raw_dataset = pd.read_excel(raw_data_file)
-    """
-    min_value = raw_dataset["价格"].min()
-    max_value = raw_dataset["价格"].max()
-    """
     std_value = raw_dataset["价格"].std()
     mean_value = raw_dataset["价格"].mean()
     
     for item in test_dataloader:
-        ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor = to_cuda(item,device)
+        ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor = to_device(item,device)
         predict_tensor = model(ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor)
         predict = predict_tensor.detach().cpu().numpy()
         
         if args.normalize:
             predict = predict*std_value+mean_value
-        """
-        if args.normalize:
-            predict = predict*(max_value-min_value)+min_value
-        """
         value_all_list.append(predict)
     value_all_list = np.hstack(value_all_list)
-    test_data_file = os.path.join(args.result_dir,"result.xlsx")
+    test_data_file = os.path.join(args.result_dir,"test_dataset.xlsx")
+    model_dir = os.path.join(args.result_dir,"model")
+    save_result_file = os.path.join(model_dir,"result.xlsx")
     test_dataset = pd.read_excel(test_data_file)
     test_dataset["价格"] = value_all_list
-    predict_file_name = os.path.join(args.result_dir,"predict.txt")
+    predict_file_name = os.path.join(model_dir,"predict.txt")
     with open(predict_file_name,mode="w",encoding="utf-8") as wfp:
         for k in range(len(test_dataset)):
             wfp.write(str(test_dataset.loc[k,"车辆id"]) +"\t"+str(test_dataset.loc[k,"价格"])+"\n")
-    test_dataset.to_excel(test_data_file,index=None)
+    test_dataset.to_excel(save_result_file,index=None)
 def draw_result(score_list,title,ylabel,xlabel,save_fig_name):
     x = np.linspace(0,len(score_list)-1,len(score_list))
     plt.figure(figsize=(10,8))
@@ -210,7 +204,7 @@ def evaluate_probability(dev_dataloader,model,device):
     target_list = []
     predict_list = []
     for item in dev_dataloader:
-        ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_tensor = to_cuda(item,device)
+        ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_tensor = to_device(item,device)
         predict_tensor = model(ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor)
         target = target_tensor.detach().cpu().numpy()
         target_list.append(target)

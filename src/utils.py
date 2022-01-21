@@ -1,8 +1,10 @@
 from cmath import log
+from dataclasses import replace
 import os
 import json
 import time
 import datetime
+from traceback import print_tb
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
@@ -14,10 +16,16 @@ logging.basicConfig(level = logging.INFO,format = '%(asctime)s - %(name)s - %(le
 logger = logging.getLogger()
 from .headers import get_headers_quesA,get_headers_quesB
 from .data import Dictionary
-def to_cuda(item,device):
+def to_device(item,device):
     value_list = []
-    for v in item:
-        value_list.append(v.to(device))
+    for v_val in item:
+        if type(v_val)==list or type(v_val)==tuple:
+            tp_list = []
+            for v in v_val:
+                tp_list.append(v.to(device))
+            value_list.append(tp_list)
+        else:
+            value_list.append(v_val.to(device))
     return value_list
 def change_txt_to_xlsx(data_dir,save_dir):
     raw_dataset_file = os.path.join(save_dir,"raw_dataset.xlsx")
@@ -279,7 +287,8 @@ def create_dataset(result_dir):
     fixed_filename = os.path.join(result_dir,"fixed_dataset_ext.xlsx")
 
     fixed_dataset.to_excel(fixed_filename,index=None)
-    logger.info("File saved in %s"%fixed_filename)    
+    logger.info("File saved in %s"%fixed_filename)
+""""""
 def fix_ext_dataset(result_dir):
     fixed_filename = os.path.join(result_dir,"fixed_dataset_ext.xlsx")
     dataset = pd.read_excel(fixed_filename)
@@ -289,9 +298,12 @@ def fix_ext_dataset(result_dir):
         str_line = json_str.replace('"',"").replace('{','').replace('}','')
         value = str_line.split(":")
         if len(value)>=2:
-            price_list.append()
+            price_list.append(float(value[-1].strip()))
         elif len(value) == 1:
-            pass
+            value = dataset.loc[k,"上架价格"]
+            price_list.append(float(value))
         else:
             print(value)
-
+    dataset.drop("{价格调整时间：调整后价格}",axis=1,inplace=True)
+    dataset["成交价格"] = price_list
+    dataset.to_excel(fixed_filename)

@@ -8,9 +8,9 @@ import torch.nn as nn
 import torch.optim as optim
 
 from config import get_parse_args
-from src.utils import filter_other_dataset,split_dataset,to_cuda,write_to_txt,create_dataset,fix_ext_dataset
-from src.data import CarDataset,batchfy
-from src.model import TabNet,TEIGANNClassifier
+from src.utils import filter_other_dataset,split_dataset,to_device,write_to_txt,create_dataset,fix_ext_dataset
+from src.data import CarDataset,batchfy,CarDatasetExtenstion,batchfy_ext
+from src.model import TabNet,TEIGANNClassifier,CombineLoss
 from src.evaluate import evaluate_probability
 
 logging.basicConfig(level = logging.INFO,format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -56,7 +56,7 @@ def train_dnn_judge_model(args):
         loss_all = 0.0
         for item in train_dataloader:
             optimizer.zero_grad()
-            ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_tensor = to_cuda(item,device)
+            ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_tensor = to_device(item,device)
             predict_tensor = model(ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor)
             
             loss = loss_fn(predict_tensor,target_tensor)
@@ -76,10 +76,43 @@ def train_dnn_judge_model(args):
     write_to_txt(loss_list,save_txt_filename)
     
 def train_tabnet_model(args):
-    ent_rel_dir = os.path.join(args.result_dir,"graph")
+    # ent_rel_dir = os.path.join(args.result_dir,"graph")
     device = torch.device('cuda') if torch.cuda.is_available() and args.cuda else torch.device('cpu')
     torch.cuda.set_device(0)
 
+    train_data_file = os.path.join(args.result_dir,"train_fixed_dataset_ext.xlsx")
+    dev_data_file = os.path.join(args.result_dir,"dev_fixed_dataset_ext.xlsx")
+    save_keys_file = os.path.join(args.data_dir,"property_ext_zh.json")
+    save_ent_dict_file = os.path.join(args.result_dir,"graph","entity2idx.json")
+    train_dataset = CarDatasetExtenstion(save_dataset_file=train_data_file,ent_dict_file=save_ent_dict_file,names_file=save_keys_file,
+                normalize=args.normalize,train=True)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset,shuffle=True,batch_size = args.batch_size,collate_fn=batchfy_ext)
+    dev_dataset = CarDatasetExtenstion(save_dataset_file=train_data_file,ent_dict_file=save_ent_dict_file,names_file=save_keys_file,
+                normalize=args.normalize,train=True)
+    dev_dataloader = torch.utils.data.DataLoader(dev_dataset,shuffle=True,batch_size = args.batch_size,collate_fn=batchfy_ext)
+    
+    ent_vocab_size = len(train_dataset.entity_dict)
+    value_size = len(train_dataset.names_dict["continue"])
+    ent_size = len(train_dataset.names_dict["discrete"])
+    time_size = len(train_dataset.names_dict["time"])
+    model = TabNet(ent_vocab_size=ent_vocab_size,ent_size=ent_size,time_size=time_size,value_size=value_size,
+            ent_dim=args.embedding_dim)
+    model.to(device)
+    optimizer = optim.Adam(model.parameters(),lr=args.learning_rate)
+    loss_fn = CombineLoss(args.v_lambda)
+
+    for epoch in range(args.epoch_times):
+        loss_all = 0.0
+        for item in train_dataloader:
+            optimizer.zero_grad()
+            ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor,target_time,target_value = to_device(item,device)
+            time_logits,price_value = model(ent_tensor,val_tensor,year_tensor,month_tensor,day_tensor)
+            loss = loss_fn(time_logits,price_value,target_time,target_value)
+            loss.backward()
+            optimizer.step()
+            val_loss = loss.item()
+            loss_all += val_loss
+        logger.info("epoch is %d, loss is %0.4f"%(epoch+1,loss_all))
 if __name__ == "__main__":
     args = get_parse_args()
     if not os.path.exists(args.log_dir):
@@ -107,11 +140,11 @@ if __name__ == "__main__":
         dev_file = os.path.join(args.result_dir,"dev_fixed_dataset.xlsx")
         split_dataset(raw_file,train_file,dev_file,percentage=args.percentage)
         create_dataset(args.result_dir)
+        fix_ext_dataset(args.result_dir)
         raw_file = os.path.join(args.result_dir,"fixed_dataset_ext.xlsx")
         train_file = os.path.join(args.result_dir,"train_fixed_dataset_ext.xlsx")
         dev_file = os.path.join(args.result_dir,"dev_fixed_dataset_ext.xlsx")
         split_dataset(raw_file,train_file,dev_file,percentage=args.percentage)
-    fix_ext_dataset(args.result_dir)
     #train_dnn_judge_model(args)
     train_tabnet_model(args)
     
